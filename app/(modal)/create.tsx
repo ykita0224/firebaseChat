@@ -9,9 +9,6 @@ const create = () => {
   const [desc, setDesc] = useState('');
   const [icon, setIcon] = useState('');
 
-  // connect to the database
-  // const startGroup = useMutation();
-
   const onCreateGroup = async () => {
     try {
       const docRef = await addDoc(collection(FIREBASE_DB, 'groups'), {
