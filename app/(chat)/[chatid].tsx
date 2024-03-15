@@ -1,10 +1,10 @@
-import { View, Text, SafeAreaView, StyleSheet, KeyboardAvoidingView, Platform, TextInput, TouchableOpacity, ListRenderItem, FlatList } from 'react-native'
+import { View, Text, SafeAreaView, StyleSheet, KeyboardAvoidingView, Platform, TextInput, TouchableOpacity, ListRenderItem, FlatList, Keyboard } from 'react-native'
 import React, { useEffect, useState } from 'react'
 import { useLocalSearchParams, useNavigation } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { addDoc, collection, doc, getDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { FIREBASE_DB } from '@/firebaseConfig';
-// import { SafeAreaView } from 'react-native-safe-area-context';
+import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 
 
@@ -32,18 +32,18 @@ const Channel = () => {
     };
     loadUser();
 
-    console.log('DB call');
     const unsubscribe = onSnapshot(collection(FIREBASE_DB, 'channel'), (snapshot) => {
-      const temp: React.SetStateAction<any[]> = [];
-      snapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        if (data.group_id == chatid) {
-          temp.push({
-            _id: doc.id,
-            ...data,
-          } );
-        }
-      });
+      const temp = snapshot.docs
+        .filter((doc) => doc.data().group_id === chatid && doc.data().sendAt != null)
+        .map((doc) => ({
+          _id: doc.id,
+          user: doc.data().user,
+          group_id: doc.data().group_id,
+          sendAt: doc.data().sendAt as Timestamp,
+          content: doc.data().content,
+        }))
+        .sort((a, b) => a.sendAt.seconds - b.sendAt.seconds);
+
       setMessages(temp);
     }, (error) => {
       console.error(error);
@@ -52,19 +52,27 @@ const Channel = () => {
     return () => unsubscribe();
   }, []);
 
+  const formatDate = (timestamp: any) => {
+    const date = timestamp.toDate(); // Convert to JavaScript Date object
+    return format(date, 'pp'); // E.g., "June 20, 2020, 11:32 PM"
+  };
+
   const renderMessage: any = ({item}: any) => {
     const isUserMessage = item?.user === user;
     // console.log(item.user);
     return (
       <View style={[styles.messageContainer, isUserMessage ? styles.userMesageContainer : styles.otherMessageContainer]}>
-        <Text>{item?.content || ''}</Text>
+        {item?.content !== '' && <Text style={[styles.messageText, isUserMessage ? styles.userMessageText : null]}>{item?.content || ''}</Text>}
+        <Text style={styles.timeStamp}>{formatDate(item.sendAt)} - {item.user}</Text>
       </View>
     );
   };
 
   const handleSendMessage = async () => {
+    Keyboard.dismiss();
+
     try {
-      const docRef = await addDoc(collection(FIREBASE_DB, 'channel'), {
+      await addDoc(collection(FIREBASE_DB, 'channel'), {
         group_id: chatid,
         content: newMessage, 
         user: user || '',
@@ -78,7 +86,7 @@ const Channel = () => {
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: '#fff'}}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={85}>
         <FlatList data={messages} renderItem={renderMessage} keyExtractor={(item) => item._id}/>
         <View style={styles.inputContainer}>
           <View style={{flexDirection: 'row'}}>
